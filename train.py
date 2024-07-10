@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
 
+from dataset import BilingualDataset, causal_mask
+from model import build_transformer
+
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
@@ -35,9 +38,37 @@ def get_ds(config):
 
     # Keep 90% of the data for training and 10% for validation
 
-    train_ds_raew = int(len(ds_raw) * 0.9)
-    val_ds_raw = len(ds_raw) - train_ds_raew
+    train_ds_raw = int(len(ds_raw) * 0.9)
+    val_ds_raw = len(ds_raw) - train_ds_raw
     train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_raw, val_ds_raw])
 
-    
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'])
+    val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'])
+
+    max_len_src = 0
+    max_len_tgt = 0
+
+    for item in ds_raw:
+        src_ids = tokenizer_src.encode(item['translation'][config['lang_src']]).ids
+        tgt_ids = tokenizer_tgt.encode(item['translation'][config['lang_tgt']]).ids
+        max_len_src = max(max_len_src, len(src_ids))
+        max_len_tgt = max(max_len_tgt, len(tgt_ids))
+
+    print(f"Max length of source language: {max_len_src}")
+    print(f"Max length of target language: {max_len_tgt}")
+
+    train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
+    val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
+
+    return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
+
+def get_model(config, vocab_src_len, vocab_tgt_len):
+    model = build_transformer(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'], config['d_model'])
+    return model
+
+ 
+
+
+
+
 
